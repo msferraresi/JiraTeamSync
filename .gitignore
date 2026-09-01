@@ -1,0 +1,47 @@
+# Entornos virtuales
+venv/
+env/
+.venv/
+ENV/
+
+# Python / Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Base de datos local y artefactos SQLite (contienen tokens y credenciales)
+*.db
+*.sqlite
+*.sqlite3
+app.db
+
+# Logs
+*.log
+app.log
+
+# Compilación y PyInstaller
+build/
+dist/
+*.spec
+
+# Testing / Pytest / Cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Archivos de configuración sensibles / Tokens
+.env
+*.token
+config/settings.yml
+
+# IDEs y Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operativo
+Thumbs.db
+Desktop.ini
+.DS_Store
