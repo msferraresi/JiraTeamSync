@@ -31,7 +31,7 @@ class JiraService:
         res.raise_for_status()
         return res.json()
 
-    def fetch_board_issues(self, board_config):
+    def fetch_board_issues(self, board_config, force: bool = False):
         mapping = json.loads(board_config.fields_mapping_json or "[]")
 
         query_fields = [
@@ -48,10 +48,14 @@ class JiraService:
             if fid not in query_fields:
                 query_fields.append(fid)
 
-        # 1. Tickets individuales del tablero
+        # 1. Tickets: si es automático, solo no terminados o terminados hace <= 30 días
+        effective_jql = board_config.custom_jql
+        if not force:
+            effective_jql = f"({effective_jql}) AND (statusCategory != Done OR resolutiondate >= -30d)"
+
         url = f"{self.base_url}/rest/api/3/search/jql"
         params = {
-            "jql": board_config.custom_jql,
+            "jql": effective_jql,
             "maxResults": 100,
             "fields": query_fields,
         }
@@ -59,9 +63,9 @@ class JiraService:
         res.raise_for_status()
         board_issues = res.json().get("issues", [])
 
-        # 2. Sprints y sus tickets específicos
+        # 2. Sprints: si es automático solo trae el activo; si es force trae los últimos cerrados
         sprints_data = []
-        raw_sprints = self.fetch_board_sprints(board_config.board_id)
+        raw_sprints = self.fetch_board_sprints(board_config.board_id, force=force)
         for s in raw_sprints:
             s_id = s.get("id")
             s_issues = self.fetch_sprint_my_issues(s_id, query_fields)
@@ -69,17 +73,19 @@ class JiraService:
 
         return board_issues, sprints_data, mapping
 
-    def fetch_board_sprints(self, board_id):
+    def fetch_board_sprints(self, board_id, force: bool = False):
         if not board_id:
             return []
-        url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint?state=active,closed"
+
+        # En corrida normal solo consulta el activo; si se fuerza trae cerrados recientes
+        state_filter = "active,closed" if force else "active"
+        url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint?state={state_filter}"
         try:
             res = requests.get(url, auth=self.auth, timeout=10)
             if res.status_code != 200:
                 return []
             sprints = res.json().get("values", [])
-            # Retornamos los últimos 3 sprints (cerrados recientes + activo)
-            return sprints[-3:] if len(sprints) > 3 else sprints
+            return sprints[-3:] if (force and len(sprints) > 3) else sprints
         except Exception as e:
             logger.warning(
                 f"No se pudieron obtener sprints del tablero {board_id}: {e}"
