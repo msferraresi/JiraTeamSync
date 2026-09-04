@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey, DateTime
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -12,12 +13,13 @@ class Client(Base):
     domain = Column(String(200), nullable=False)
     email = Column(String(200), nullable=False)
     api_token = Column(String(300), nullable=False)
-
     is_active = Column(Boolean, default=True)
     time_window_start = Column(String(5), default="07:00")
     time_window_end = Column(String(5), default="20:00")
     active_weekdays_only = Column(Boolean, default=True)
     vpn_check_host = Column(String(200), nullable=True)
+    sync_interval_minutes = Column(Integer, default=60)
+    last_synced_at = Column(DateTime, nullable=True)
 
     boards = relationship(
         "BoardConfig", back_populates="client", cascade="all, delete-orphan"
