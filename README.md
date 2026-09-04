@@ -54,6 +54,7 @@ JiraTeamSync/
 ---
 
 ## ⚙️ Requisitos Previos
+
 - Windows 10/11 x64.
 - Python 3.10+.
 - Microsoft Outlook instalado y configurado con la cuenta corporativa.
@@ -62,7 +63,9 @@ JiraTeamSync/
 ---
 
 ## 🛠️ Instalación y Entorno
+
 PowerShell
+
 ```text
 # 1. Crear y activar entorno virtual
 python -m venv venv
@@ -75,17 +78,20 @@ pip install -r requirements-dev.txt
 ---
 
 ## 💻 Ejecución en Desarrollo
+
 PowerShell
+
 ```text
 python .\main.py
 ```
+
 ---
 
 Al iniciar:
 
 1. Se crean automáticamente las tablas en app.db si no existen.
 
-2. Se levanta el servidor web local en http://127.0.0.1:8765.
+2. Se levanta el servidor web local en <http://127.0.0.1:8765>
 
 3. Se inicia el bucle de sincronización periódica en segundo plano.
 
@@ -94,6 +100,7 @@ Al iniciar:
 ---
 
 ## 📌 Menú de la Bandeja del Sistema (System Tray)
+
 Al hacer clic derecho sobre el icono en la barra de tareas de Windows:
 
 - Configuración ⚙️: Abre el navegador en la interfaz web de gestión (solapas General, Conexiones y Logs).
@@ -113,12 +120,16 @@ Al hacer clic derecho sobre el icono en la barra de tareas de Windows:
 ---
 
 ## 🧪 Ejecución de Pruebas Unitarias
+
 PowerShell
+
 ```text
 # Correr toda la suite de pruebas
 pytest tests/ -v
 ```
+
 ---
+
 ## 🎨 Configuración de Colores en Microsoft Teams (Formato Condicional)
 
 Para que Teams resalte los eventos con la paleta de colores por estado, ve a **Teams > Calendario > Configuración (⚙️) > Conditional formatting (Formato condicional)** y da de alta las siguientes reglas mediante la opción **Subject includes**:
@@ -136,14 +147,19 @@ Para que Teams resalte los eventos con la paleta de colores por estado, ve a **T
 ---
 
 ## 📦 Compilación a Ejecutable (.exe)
+
 Para compilar el proyecto en un binario portable e independiente:
 
 PowerShell
+
 - Ejecuta el siguiente comando para borrar las compilaciones previas.
+
 ```text
 Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
 ```
+
 - Ejecuta este comando para compilar el proyecto en un archivo exe,
+
 ```text
 pyinstaller --noconsole --onefile `
   --collect-all uvicorn `
@@ -153,4 +169,5 @@ pyinstaller --noconsole --onefile `
   --add-data "resource;resource" `
   --name JiraTeamsSync main.py
 ```
-El ejecutable quedará disponible en dist/JiraTeamsSync.exe.
+
+El ejecutable quedará disponible en /dist/JiraTeamsSync.exe

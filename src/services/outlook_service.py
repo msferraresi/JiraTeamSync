@@ -118,12 +118,7 @@ class OutlookService:
                 resolution_date_str = fields.get("resolutiondate")
                 k = issue["key"]
 
-                sp_fid = role_map.get("story_points")
-                sp_val = fields.get(sp_fid) if sp_fid else None
-                try:
-                    sp_num = float(sp_val) if sp_val is not None else 0.0
-                except (ValueError, TypeError):
-                    sp_num = 0.0
+                sp_num = self._extract_points(fields, role_map, field_mapping)
 
                 is_done = status_cat == "done"
 
@@ -268,12 +263,7 @@ class OutlookService:
             dt_end = parser.parse(effective_end).date()
             dt_end_inclusive = dt_end + timedelta(days=1)
 
-            sp_fid = role_map.get("story_points")
-            sp_val = fields.get(sp_fid) if sp_fid else None
-            try:
-                sp_num = float(sp_val) if sp_val is not None else 0.0
-            except (ValueError, TypeError):
-                sp_num = 0.0
+            sp_num = self._extract_points(fields, role_map, field_mapping)
 
             hours_per_sp = board_config.hours_per_sp or 4
             total_hours = sp_num * hours_per_sp
@@ -353,3 +343,31 @@ class OutlookService:
                 logger.info(f"✅ Ticket creado en calendario: {k} en {dt_start}")
 
         return created_count, updated_count, unchanged_count
+
+    def _extract_points(
+        self, fields: dict, role_map: dict, field_mapping: list
+    ) -> float:
+        """Obtiene Story Points o hace fallback a Bugpoints si el ticket es un bug."""
+        # 1. Intentar por el rol estándar mapeado
+        sp_fid = role_map.get("story_points")
+        sp_val = fields.get(sp_fid) if sp_fid else None
+
+        # 2. Si viene None o 0, buscar el campo Bugpoints
+        if sp_val is None:
+            # Buscar por nombre en el mapeo de campos guardado
+            bp_fid = next(
+                (
+                    m["field_id"]
+                    for m in field_mapping
+                    if "bugpoint" in m.get("field_name", "").lower()
+                ),
+                None,
+            )
+            if bp_fid:
+                sp_val = fields.get(bp_fid)
+
+        # 3. Conversión segura a float
+        try:
+            return float(sp_val) if sp_val is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0

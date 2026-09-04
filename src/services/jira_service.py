@@ -1,6 +1,7 @@
 import json
 import requests
 from src.utils.logger import logger
+import re
 
 
 class JiraService:
@@ -48,10 +49,18 @@ class JiraService:
             if fid not in query_fields:
                 query_fields.append(fid)
 
-        # 1. Tickets: si es automático, solo no terminados o terminados hace <= 30 días
-        effective_jql = board_config.custom_jql
+        raw_jql = (board_config.custom_jql or "").strip()
+        order_by_clause = ""
+
+        if "order by" in raw_jql.lower():
+            parts = re.split(r"(?i)\s+order\s+by\s+", raw_jql, maxsplit=1)
+            raw_jql = parts[0].strip()
+            order_by_clause = f" ORDER BY {parts[1].strip()}"
+
         if not force:
-            effective_jql = f"({effective_jql}) AND (statusCategory != Done OR resolutiondate >= -30d)"
+            effective_jql = f"({raw_jql}) AND (statusCategory != Done OR resolutiondate >= -30d){order_by_clause}"
+        else:
+            effective_jql = f"{raw_jql}{order_by_clause}"
 
         url = f"{self.base_url}/rest/api/3/search/jql"
         params = {
@@ -63,7 +72,6 @@ class JiraService:
         res.raise_for_status()
         board_issues = res.json().get("issues", [])
 
-        # 2. Sprints: si es automático solo trae el activo; si es force trae los últimos cerrados
         sprints_data = []
         raw_sprints = self.fetch_board_sprints(board_config.board_id, force=force)
         for s in raw_sprints:
