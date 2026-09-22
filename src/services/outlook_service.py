@@ -18,10 +18,8 @@ class OutlookService:
         for item in items:
             try:
                 subj = getattr(item, "Subject", "")
-                # Busca [SPRINT-123] o [ABC-123] en cualquier parte del asunto
                 matches = re.findall(r"\[([A-Z0-9_\-]+)\]", subj)
                 for m in matches:
-                    # Si coincide con SPRINT- o tiene formato de key (ej: CBS-5060)
                     if m.startswith("SPRINT-") or "-" in m:
                         events_map[m] = item
                         break
@@ -35,10 +33,9 @@ class OutlookService:
 
         if item_type == "sprint":
             if status_lower in ["closed", "cerrado"]:
-                return "Categoría verde, Green Category"
-            return "Categoría amarilla, Yellow Category"
+                return "Green Category"
+            return "Yellow Category"
 
-        # Lógica para tickets / issues
         if status_lower in [
             "done",
             "closed",
@@ -47,10 +44,10 @@ class OutlookService:
             "cerrado",
             "completado",
         ]:
-            return "Categoría verde, Green Category"
+            return "Green Category"
 
         if status_lower in ["in progress", "en curso", "en desarrollo", "in dev"]:
-            return "Categoría púrpura, Purple Category"
+            return "Purple Category"
 
         if status_lower in [
             "en espera",
@@ -60,10 +57,9 @@ class OutlookService:
             "dev implementación pendiente",
             "pendiente",
         ]:
-            return "Categoría naranja, Orange Category"
+            return "Orange Category"
 
-        # Color por defecto (backlog / to do)
-        return "Categoría azul, Blue Category"
+        return "Blue Category"
 
     def sync_board_issues(
         self,
@@ -88,7 +84,7 @@ class OutlookService:
         # --- A. Sincronización Estricta de Sprints ---
         for sprint_entry in sprints_data:
             sprint = sprint_entry["meta"]
-            sprint_issues = sprint_entry["issues"]
+            sprint_issues = sprint_entry.get("issues", [])
             s_id_num = sprint.get("id")
             s_name = sprint.get("name", "Sprint")
             s_id = f"SPRINT-{s_id_num}"
@@ -109,41 +105,123 @@ class OutlookService:
             my_closed_issues = []
             my_pending_issues = []
 
-            for issue in sprint_issues:
+            # 1. Unificar todos los candidatos (de la query de sprint y del tablero general)
+            all_candidate_issues = {}
+            for it in sprint_issues:
+                all_candidate_issues[it["key"]] = it
+            for it in issues:
+                all_candidate_issues[it["key"]] = it
+
+            # Prefijos de proyecto válidos para este sprint (ej: CBS)
+            sprint_project_prefixes = {
+                it["key"].split("-")[0]
+                for it in sprint_issues
+                if "-" in it.get("key", "")
+            }
+
+            # 2. Evaluar cada ticket para ver si realmente pertenece a este Sprint
+            for k, issue in all_candidate_issues.items():
                 fields = issue["fields"]
                 status_obj = fields.get("status", {})
                 status_cat = status_obj.get("statusCategory", {}).get("key", "")
-                status_name = status_obj.get("name", "")
+                status_name = status_obj.get("name", "").strip()
+                status_lower = status_name.lower()
+
+                # Ignorar tickets cancelados/descartados
+                if any(
+                    term in status_lower
+                    for term in ["cancelado", "cancelled", "descartado", "rechazado"]
+                ):
+                    continue
+
+                # AISLAMIENTO DE PROYECTO:
+                # Verificar asignación directa por Jira
+                sprint_field_raw = str(fields.get("customfield_10020") or "")
+                explicitly_in_sprint = (str(s_id_num) in sprint_field_raw) or (
+                    s_name.lower() in sprint_field_raw.lower()
+                )
+                officially_in_sprint = k in {it["key"] for it in sprint_issues}
+
                 summary = fields.get("summary", "")
-                resolution_date_str = fields.get("resolutiondate")
-                k = issue["key"]
+                res_str = fields.get("resolutiondate")
 
+                real_end = (
+                    fields.get(role_map.get("real_end"))
+                    if "real_end" in role_map
+                    else None
+                )
+                real_start = (
+                    fields.get(role_map.get("real_start"))
+                    if "real_start" in role_map
+                    else None
+                )
+                exp_start = (
+                    fields.get(role_map.get("exp_start"))
+                    if "exp_start" in role_map
+                    else None
+                )
+                exp_end = (
+                    fields.get(role_map.get("exp_end"))
+                    if "exp_end" in role_map
+                    else fields.get("duedate")
+                )
+
+                effective_date_str = (
+                    res_str or real_end or exp_end or real_start or exp_start
+                )
+                dt_ticket = (
+                    parser.parse(effective_date_str).date()
+                    if effective_date_str
+                    else None
+                )
+                in_date_window = bool(
+                    dt_ticket and (dt_s_start <= dt_ticket <= dt_s_end)
+                )
+
+                ticket_prefix = k.split("-")[0] if "-" in k else ""
+                same_project_family = (
+                    ticket_prefix in sprint_project_prefixes
+                    if sprint_project_prefixes
+                    else True
+                )
+
+                # Si no está oficialmente asignado al sprint, sólo entra si es del mismo proyecto Y cae en fecha
+                if not explicitly_in_sprint and not officially_in_sprint:
+                    if not (same_project_family and in_date_window):
+                        continue
+
+                # FILTRO DE EXCLUSIÓN PARA TICKETS VIEJOS (ej: cerrados en meses previos):
+                close_date_str = res_str or real_end
+                if close_date_str:
+                    dt_closed = parser.parse(close_date_str).date()
+                    if dt_closed < dt_s_start:
+                        continue
+
+                # Extracción de puntos y tipo
                 sp_num = self._extract_points(fields, role_map, field_mapping)
+                issue_type_obj = fields.get("issuetype") or {}
+                type_name = (
+                    issue_type_obj.get("name", "").upper()
+                    if isinstance(issue_type_obj, dict)
+                    else ""
+                )
+                type_badge = f"[{type_name}] " if type_name else ""
 
-                is_done = status_cat == "done"
+                is_done = (status_cat == "done") or (
+                    status_name.lower()
+                    in ["cerrado", "closed", "resuelto", "finalizado"]
+                )
 
                 if is_done:
-                    if resolution_date_str:
-                        dt_res = parser.parse(resolution_date_str).date()
-                        if dt_s_start <= dt_res <= dt_s_end:
-                            my_sp_estimated += sp_num
-                            my_sp_completed += sp_num
-                            my_closed_issues.append(
-                                f"  ✅ [{k}] ({sp_num:g} SP) {summary}"
-                            )
-                        elif s_state == "closed" and dt_res <= dt_s_end:
-                            pass
-                    else:
-                        if s_state == "closed":
-                            my_sp_estimated += sp_num
-                            my_sp_completed += sp_num
-                            my_closed_issues.append(
-                                f"  ✅ [{k}] ({sp_num:g} SP) {summary}"
-                            )
+                    my_sp_estimated += sp_num
+                    my_sp_completed += sp_num
+                    my_closed_issues.append(
+                        f"  ✅ {type_badge}[{k}] ({sp_num:g} SP) {summary}"
+                    )
                 else:
                     my_sp_estimated += sp_num
                     my_pending_issues.append(
-                        f"  ⏳ [{k}] ({sp_num:g} SP | {status_name}) {summary}"
+                        f"  ⏳ {type_badge}[{k}] ({sp_num:g} SP | {status_name}) {summary}"
                     )
 
             hours_per_sp = board_config.hours_per_sp or 4
@@ -153,12 +231,10 @@ class OutlookService:
                 int((my_sp_completed / my_sp_estimated) * 100) if my_sp_estimated else 0
             )
 
-            # 1. Determinar el estado para la etiqueta
             sprint_state_tag = (
                 "CERRADO" if s_state in ["closed", "cerrado"] else "ACTIVO"
             )
 
-            # 2. Asunto con tag explícito [ESTADO: ...]
             sprint_subject = f"[{client_name}] [{s_id}] [ESTADO: {sprint_state_tag}] {s_name} | Mis SP: {my_sp_completed:g}/{my_sp_estimated:g} ({pct}%) [{my_hours_completed:g}h/{my_hours_estimated:g}h]"
 
             sprint_body = [
@@ -228,30 +304,55 @@ class OutlookService:
         for issue in issues:
             k = issue["key"]
             fields = issue["fields"]
-            summary = fields.get("summary", "")
             status_name = fields.get("status", {}).get("name", "Desconocido")
+            status_lower = status_name.lower().strip()
+
+            # Descartar tickets cancelados
+            if any(
+                term in status_lower
+                for term in ["cancelado", "cancelled", "descartado", "rechazado"]
+            ):
+                if k in events_map:
+                    try:
+                        events_map[k].Delete()
+                    except Exception:
+                        pass
+                continue
+
+            # Extracción del tipo de ticket (Bug, Subtarea, Historia, etc.)
+            issue_type_obj = fields.get("issuetype") or {}
+            type_name = (
+                issue_type_obj.get("name", "").upper()
+                if isinstance(issue_type_obj, dict)
+                else ""
+            )
+            type_tag = f"[{type_name}] " if type_name else ""
+
+            summary = fields.get("summary", "")
 
             real_start = (
                 fields.get(role_map.get("real_start"))
                 if "real_start" in role_map
                 else None
             )
-            real_end = (
-                fields.get(role_map.get("real_end"))
-                if "real_end" in role_map
-                else fields.get("resolutiondate")
-            )
+
+            real_end = None
+            if "real_end" in role_map:
+                real_end = fields.get(role_map.get("real_end"))
+            if not real_end:
+                real_end = fields.get("resolutiondate")
 
             exp_start = (
                 fields.get(role_map.get("exp_start"))
                 if "exp_start" in role_map
                 else None
             )
-            exp_end = (
-                fields.get(role_map.get("exp_end"))
-                if "exp_end" in role_map
-                else fields.get("duedate")
-            )
+
+            exp_end = None
+            if "exp_end" in role_map:
+                exp_end = fields.get(role_map.get("exp_end"))
+            if not exp_end:
+                exp_end = fields.get("duedate")
 
             effective_start = real_start or exp_start or real_end or exp_end
             effective_end = real_end or exp_end or real_start or exp_start
@@ -268,12 +369,13 @@ class OutlookService:
             hours_per_sp = board_config.hours_per_sp or 4
             total_hours = sp_num * hours_per_sp
 
-            # Prefijo con cliente y tag explícito [ESTADO: ...]
-            subject = f"[{client_name}] [{k}] [ESTADO: {status_name.upper()}] ({sp_num:g} SP / {total_hours:g}h) {summary}"
+            # Prefijo con Cliente, Tipo de Incidencia y Tag explícito [ESTADO: ...]
+            subject = f"[{client_name}] {type_tag}[{k}] [ESTADO: {status_name.upper()}] ({sp_num:g} SP / {total_hours:g}h) {summary}"
 
             body_lines = [
                 f"Cliente: {client_name}",
                 f"Ticket: https://{domain}/browse/{k}",
+                f"Tipo: {type_name or 'N/A'}",
                 f"Resumen: {summary}",
                 f"Estado: {status_name}",
                 f"Story Points: {sp_num:g} ({total_hours:g} hs de esfuerzo)",
@@ -347,27 +449,40 @@ class OutlookService:
     def _extract_points(
         self, fields: dict, role_map: dict, field_mapping: list
     ) -> float:
-        """Obtiene Story Points o hace fallback a Bugpoints si el ticket es un bug."""
-        # 1. Intentar por el rol estándar mapeado
-        sp_fid = role_map.get("story_points")
-        sp_val = fields.get(sp_fid) if sp_fid else None
+        """Busca el valor de puntos dinámicamente sin IDs harcodeados, compatible con cualquier cliente."""
+        point_field_ids = []
 
-        # 2. Si viene None o 0, buscar el campo Bugpoints
-        if sp_val is None:
-            # Buscar por nombre en el mapeo de campos guardado
-            bp_fid = next(
-                (
-                    m["field_id"]
-                    for m in field_mapping
-                    if "bugpoint" in m.get("field_name", "").lower()
-                ),
-                None,
-            )
-            if bp_fid:
-                sp_val = fields.get(bp_fid)
+        primary_sp_fid = role_map.get("story_points")
+        if primary_sp_fid:
+            point_field_ids.append(primary_sp_fid)
 
-        # 3. Conversión segura a float
-        try:
-            return float(sp_val) if sp_val is not None else 0.0
-        except (ValueError, TypeError):
-            return 0.0
+        secondary_fids = []
+        for m in field_mapping:
+            fid = m.get("field_id")
+            fname = m.get("field_name", "").lower()
+
+            if not fid or fid in point_field_ids:
+                continue
+
+            if any(
+                term in fname
+                for term in ["point", "puntos", "story point", "bugpoint", "taskpoint"]
+            ):
+                if "final" in fname or "real" in fname:
+                    secondary_fids.insert(0, fid)
+                else:
+                    secondary_fids.append(fid)
+
+        point_field_ids.extend(secondary_fids)
+
+        for fid in point_field_ids:
+            val = fields.get(fid)
+            if val is not None:
+                try:
+                    num = float(val)
+                    if num > 0:
+                        return num
+                except (ValueError, TypeError):
+                    continue
+
+        return 0.0
