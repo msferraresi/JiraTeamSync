@@ -39,15 +39,24 @@ class JiraService:
             "summary",
             "key",
             "status",
+            "issuetype",
             "duedate",
             "resolutiondate",
             "created",
-            "customfield_10020",
         ]
+        sprint_fid = None
         for m in mapping:
             fid = m["field_id"]
+            fname = m.get("field_name", "").lower()
             if fid not in query_fields:
                 query_fields.append(fid)
+            if fname == "sprint" or "sprint" in fname:
+                sprint_fid = fid
+
+        if sprint_fid and sprint_fid not in query_fields:
+            query_fields.append(sprint_fid)
+        elif "customfield_10020" not in query_fields:
+            query_fields.append("customfield_10020")
 
         raw_jql = (board_config.custom_jql or "").strip()
         order_by_clause = ""

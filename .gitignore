@@ -17,6 +17,7 @@ app.db
 
 # Logs
 *.log
+*.log*
 app.log
 
 # Compilación y PyInstaller

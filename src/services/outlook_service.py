@@ -33,8 +33,8 @@ class OutlookService:
 
         if item_type == "sprint":
             if status_lower in ["closed", "cerrado"]:
-                return "Green Category"
-            return "Yellow Category"
+                return "Green category"
+            return "Yellow category"
 
         if status_lower in [
             "done",
@@ -44,10 +44,10 @@ class OutlookService:
             "cerrado",
             "completado",
         ]:
-            return "Green Category"
+            return "Green category"
 
         if status_lower in ["in progress", "en curso", "en desarrollo", "in dev"]:
-            return "Purple Category"
+            return "Purple category"
 
         if status_lower in [
             "en espera",
@@ -57,9 +57,9 @@ class OutlookService:
             "dev implementación pendiente",
             "pendiente",
         ]:
-            return "Orange Category"
+            return "Orange category"
 
-        return "Blue Category"
+        return "Blue category"
 
     def sync_board_issues(
         self,
@@ -134,9 +134,15 @@ class OutlookService:
                 ):
                     continue
 
-                # AISLAMIENTO DE PROYECTO:
-                # Verificar asignación directa por Jira
-                sprint_field_raw = str(fields.get("customfield_10020") or "")
+                # AISLAMIENTO DE PROYECTO (Detección dinámica de sprints sin IDs fijos):
+                sprint_raw_val = fields.get("customfield_10020")
+                if not sprint_raw_val:
+                    for f_key, f_val in fields.items():
+                        if "sprint" in f_key.lower() and f_val:
+                            sprint_raw_val = f_val
+                            break
+
+                sprint_field_raw = str(sprint_raw_val or "")
                 explicitly_in_sprint = (str(s_id_num) in sprint_field_raw) or (
                     s_name.lower() in sprint_field_raw.lower()
                 )
@@ -190,7 +196,7 @@ class OutlookService:
                     if not (same_project_family and in_date_window):
                         continue
 
-                # FILTRO DE EXCLUSIÓN PARA TICKETS VIEJOS (ej: cerrados en meses previos):
+                # FILTRO DE EXCLUSIÓN PARA TICKETS VIEJOS:
                 close_date_str = res_str or real_end
                 if close_date_str:
                     dt_closed = parser.parse(close_date_str).date()
