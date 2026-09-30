@@ -1,7 +1,7 @@
 import json
 import requests
 from src.utils.logger import logger
-import re
+from src.utils.jira_utils import sanitize_and_prepare_jql
 
 
 class JiraService:
@@ -60,18 +60,8 @@ class JiraService:
         elif "customfield_10020" not in query_fields:
             query_fields.append("customfield_10020")
 
-        raw_jql = (board_config.custom_jql or "").strip()
-        order_by_clause = ""
-
-        if "order by" in raw_jql.lower():
-            parts = re.split(r"(?i)\s+order\s+by\s+", raw_jql, maxsplit=1)
-            raw_jql = parts[0].strip()
-            order_by_clause = f" ORDER BY {parts[1].strip()}"
-
-        if not force:
-            effective_jql = f"({raw_jql}) AND (statusCategory != Done OR resolutiondate >= -30d){order_by_clause}"
-        else:
-            effective_jql = f"{raw_jql}{order_by_clause}"
+        # Utiliza la nueva función utilitaria
+        effective_jql = sanitize_and_prepare_jql(board_config.custom_jql, force=force)
 
         url = f"{self.base_url}/rest/api/3/search/jql"
         params = {
@@ -96,7 +86,6 @@ class JiraService:
         if not board_id:
             return []
 
-        # En corrida normal solo consulta el activo; si se fuerza trae cerrados recientes
         state_filter = "active,closed" if force else "active"
         url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint?state={state_filter}"
         try:
@@ -112,7 +101,6 @@ class JiraService:
             return []
 
     def fetch_sprint_my_issues(self, sprint_id, query_fields):
-        """Consulta tickets asignados al usuario filtrando por el ID específico de Sprint en JQL."""
         url = f"{self.base_url}/rest/api/3/search/jql"
         params = {
             "jql": f"sprint = {sprint_id} AND assignee = currentUser()",
