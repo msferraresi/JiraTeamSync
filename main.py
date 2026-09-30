@@ -123,6 +123,7 @@ def execute_sync(force: bool = False, target_client_id: int = None):
                         board_config=board,
                         domain=client.domain,
                         client_name=client.name,
+                        user_email=client.email,
                     )
                     logger.info(
                         f"📊 [{board.board_name}] Creados: {created} | Actualizados: {updated} | Sin cambios: {unchanged}"
