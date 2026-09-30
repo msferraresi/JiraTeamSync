@@ -1,6 +1,7 @@
 from datetime import datetime
-from src.services.network_guard import NetworkGuard
+
 from src.db.models import Client
+from src.services.network_guard import NetworkGuard
 
 
 def test_time_window_allowed(monkeypatch):

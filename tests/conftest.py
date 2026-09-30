@@ -2,7 +2,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from src.db.models import Base, AppSettings
+
+from src.db.models import AppSettings, Base
 
 
 @pytest.fixture

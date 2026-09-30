@@ -1,6 +1,5 @@
 import socket
 from datetime import datetime
-from src.utils.logger import logger
 
 
 class NetworkGuard:
