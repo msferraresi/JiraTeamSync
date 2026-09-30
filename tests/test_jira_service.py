@@ -1,13 +1,13 @@
-from unittest.mock import MagicMock
-from src.services.jira_service import JiraService
-from src.db.models import Client
-from src.utils.jira_utils import (
-    sanitize_and_prepare_jql,
-    extract_story_points,
-    extract_user_logged_hours,
-)
-from src.utils.date_utils import format_all_day_range
 from datetime import date
+from unittest.mock import MagicMock
+
+from src.db.models import Client
+from src.services.jira_service import JiraService
+from src.utils.date_utils import format_all_day_range
+from src.utils.jira_utils import (
+    extract_user_logged_hours,
+    sanitize_and_prepare_jql,
+)
 
 
 def test_fetch_board_sprints(monkeypatch):

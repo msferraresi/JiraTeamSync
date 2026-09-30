@@ -1,11 +1,12 @@
 from datetime import timedelta
-from typing import Optional, Tuple, Dict, Any
+from typing import Any, Optional
+
 from dateutil import parser
 
 
 def parse_effective_issue_dates(
     fields: dict, role_map: dict
-) -> Tuple[Optional[object], Optional[object], Dict[str, Any]]:
+) -> tuple[Optional[object], Optional[object], dict[str, Any]]:
     """Resuelve las fechas efectivas de inicio y fin junto con los valores crudos para el cuerpo."""
     real_start = (
         fields.get(role_map.get("real_start")) if "real_start" in role_map else None
@@ -42,7 +43,7 @@ def parse_effective_issue_dates(
     return dt_start, dt_end, raw_dates
 
 
-def format_all_day_range(dt_start, dt_end) -> Tuple[str, str]:
+def format_all_day_range(dt_start, dt_end) -> tuple[str, str]:
     """Genera las marcas de tiempo con final inclusivo para citas de día completo en Outlook."""
     dt_end_inclusive = dt_end + timedelta(days=1)
     return dt_start.strftime("%Y-%m-%d 00:00"), dt_end_inclusive.strftime(

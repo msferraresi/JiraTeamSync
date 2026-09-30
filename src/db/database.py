@@ -1,8 +1,10 @@
 import os
 import sys
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from src.db.models import Base, AppSettings
+
+from src.db.models import AppSettings, Base
 
 
 def get_db_path():

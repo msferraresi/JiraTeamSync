@@ -1,7 +1,9 @@
 import json
+
 import requests
-from src.utils.logger import logger
+
 from src.utils.jira_utils import sanitize_and_prepare_jql
+from src.utils.logger import logger
 
 
 class JiraService:
