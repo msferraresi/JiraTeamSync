@@ -1,20 +1,21 @@
-from datetime import datetime, timedelta
 import os
 import sys
-import time
 import threading
+import time
 import webbrowser
+from datetime import datetime, timedelta
+
 import pystray
-from PIL import Image, ImageDraw
 import pythoncom
+from PIL import Image, ImageDraw
 
 from src.db.database import SessionLocal, init_db
-from src.db.models import Client, BoardConfig, AppSettings
+from src.db.models import AppSettings, Client
 from src.server.web_server import run_server
 from src.services.jira_service import JiraService
-from src.services.outlook_service import OutlookService
 from src.services.network_guard import NetworkGuard
-from src.utils.logger import logger, LOG_FILE
+from src.services.outlook_service import OutlookService
+from src.utils.logger import LOG_FILE, logger
 
 is_syncing = False
 is_paused = False

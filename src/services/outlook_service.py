@@ -1,9 +1,11 @@
 import re
-from dateutil import parser
+
 import win32com.client
-from src.utils.logger import logger
+from dateutil import parser
+
+from src.utils.date_utils import format_all_day_range, parse_effective_issue_dates
 from src.utils.jira_utils import extract_story_points, extract_user_logged_hours
-from src.utils.date_utils import parse_effective_issue_dates, format_all_day_range
+from src.utils.logger import logger
 
 
 class OutlookService:

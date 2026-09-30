@@ -1,16 +1,17 @@
+import json
 import os
 import sys
-import json
-import uvicorn
+from typing import Any, Optional
+
 import requests
-from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException, Depends, Query
+import uvicorn
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.db.database import SessionLocal, init_db
-from src.db.models import Client, BoardConfig, AppSettings
+from src.db.models import AppSettings, BoardConfig, Client
 from src.utils.logger import LOG_FILE
 
 app = FastAPI(title="JiraTeamsSync Admin")
@@ -50,7 +51,7 @@ class BoardConfigSchema(BaseModel):
     board_name: str
     custom_jql: str
     hours_per_sp: int = 4
-    fields_mapping: List[Dict[str, Any]] = []
+    fields_mapping: list[dict[str, Any]] = []
 
 
 # --- Endpoints App Settings ---
@@ -321,7 +322,7 @@ HTML_TEMPLATE = """
     <div id="tab-connections" class="tab-content">
         <div class="card">
             <h2>🏢 Clientes Configurados</h2>
-            <div id="clientsList">Cargando...</div>
+            <div id="clientslist">Cargando...</div>
 
             <h3 style="margin-top: 25px;">➕ Agregar Cliente</h3>
             <div class="grid-3">
@@ -364,7 +365,7 @@ HTML_TEMPLATE = """
 
         <div class="card" id="boardsSection" style="display:none;">
             <h2 id="currentClientTitle">📋 Tableros del Cliente</h2>
-            <div id="boardsList"></div>
+            <div id="boardslist"></div>
 
             <h3 id="boardFormTitle" style="margin-top:25px;">➕ Configurar Tablero</h3>
             <input type="hidden" id="edit_board_db_id" value="">
@@ -433,10 +434,10 @@ HTML_TEMPLATE = """
     let logTimer = null;
 
     function switchTab(tabId, btn) {
-        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById(tabId).classList.add('active');
-        btn.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(el => el.classlist.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classlist.remove('active'));
+        document.getElementById(tabId).classlist.add('active');
+        btn.classlist.add('active');
 
         if(tabId === 'tab-logs') {
             loadLogs();
@@ -465,7 +466,7 @@ HTML_TEMPLATE = """
             .then(r => r.json())
             .then(data => {
                 if(!data || !data.length) { 
-                    document.getElementById('clientsList').innerHTML = '<p>No hay clientes configurados.</p>'; 
+                    document.getElementById('clientslist').innerHTML = '<p>No hay clientes configurados.</p>'; 
                     return; 
                 }
                 let h = '<table><tr><th>Nombre</th><th>Dominio</th><th>Horario</th><th>Intervalo</th><th>Tableros</th><th>Acciones</th></tr>';
@@ -483,11 +484,11 @@ HTML_TEMPLATE = """
                         </td>
                     </tr>`;
                 });
-                document.getElementById('clientsList').innerHTML = h + '</table>';
+                document.getElementById('clientslist').innerHTML = h + '</table>';
             })
             .catch(err => {
                 console.error("Error al cargar clientes:", err);
-                document.getElementById('clientsList').innerHTML = '<p style="color:#f87171;">Error al cargar clientes.</p>';
+                document.getElementById('clientslist').innerHTML = '<p style="color:#f87171;">Error al cargar clientes.</p>';
             });
     }
 
@@ -558,7 +559,7 @@ HTML_TEMPLATE = """
             .then(r => r.json())
             .then(boards => {
                 if(!boards.length) {
-                    document.getElementById('boardsList').innerHTML = '<p>Sin tableros configurados para este cliente.</p>';
+                    document.getElementById('boardslist').innerHTML = '<p>Sin tableros configurados para este cliente.</p>';
                     return;
                 }
                 let h = '<table><tr><th>Tablero</th><th>Filtro JQL</th><th>Horas/SP</th><th>Acciones</th></tr>';
@@ -574,7 +575,7 @@ HTML_TEMPLATE = """
                         </td>
                     </tr>`;
                 });
-                document.getElementById('boardsList').innerHTML = h + '</table>';
+                document.getElementById('boardslist').innerHTML = h + '</table>';
             });
     }
 

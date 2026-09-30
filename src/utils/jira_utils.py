@@ -1,5 +1,4 @@
 import re
-from typing import List, Dict, Any, Optional
 
 
 def sanitize_and_prepare_jql(raw_jql: str, force: bool = False) -> str:
