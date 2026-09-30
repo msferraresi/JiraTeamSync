@@ -1,8 +1,9 @@
 import re
-from datetime import timedelta
 from dateutil import parser
 import win32com.client
 from src.utils.logger import logger
+from src.utils.jira_utils import extract_story_points, extract_user_logged_hours
+from src.utils.date_utils import parse_effective_issue_dates, format_all_day_range
 
 
 class OutlookService:
@@ -185,7 +186,6 @@ class OutlookService:
         ):
             return False
 
-        # Detección de sprint
         sprint_raw_val = fields.get("customfield_10020")
         if not sprint_raw_val:
             sprint_raw_val = next(
@@ -198,7 +198,6 @@ class OutlookService:
         )
         officially_in_sprint = any(it.get("key") == key for it in sprint_issues)
 
-        # Resolución de fechas
         res_str = fields.get("resolutiondate")
         real_end = (
             fields.get(role_map.get("real_end")) if "real_end" in role_map else None
@@ -250,7 +249,6 @@ class OutlookService:
         role_map: dict,
         field_mapping: list,
     ):
-        """Calcula los SP completados, estimados y las listas de tickets para el reporte."""
         sp_est, sp_comp = 0.0, 0.0
         closed_issues, pending_issues = [], []
 
@@ -273,7 +271,7 @@ class OutlookService:
             status_cat = status_obj.get("statusCategory", {}).get("key", "")
             status_name = status_obj.get("name", "").strip()
 
-            sp_num = self._extract_points(fields, role_map, field_mapping)
+            sp_num = extract_story_points(fields, role_map, field_mapping)
             issue_type_obj = fields.get("issuetype") or {}
             type_name = (
                 issue_type_obj.get("name", "").upper()
@@ -315,7 +313,6 @@ class OutlookService:
         closed_issues: list,
         pending_issues: list,
     ) -> str:
-        """Genera el contenido de texto estructurado para el cuerpo del evento en Outlook."""
         return "\n".join(
             [
                 f"Cliente: {client_name}",
@@ -362,7 +359,6 @@ class OutlookService:
         s_id_num, s_name = sprint.get("id"), sprint.get("name", "Sprint")
         s_id, s_state = f"SPRINT-{s_id_num}", sprint.get("state", "").lower()
         dt_s_start, dt_s_end = parser.parse(s_start).date(), parser.parse(s_end).date()
-        dt_s_end_inclusive = dt_s_end + timedelta(days=1)
 
         candidate_issues = {it["key"]: it for it in sprint_entry.get("issues", [])}
         for it in all_issues:
@@ -410,9 +406,7 @@ class OutlookService:
         )
 
         category = self.resolve_category_for_item("sprint", s_state)
-        start_str, end_str = dt_s_start.strftime(
-            "%Y-%m-%d 00:00"
-        ), dt_s_end_inclusive.strftime("%Y-%m-%d 00:00")
+        start_str, end_str = format_all_day_range(dt_s_start, dt_s_end)
 
         result = self._upsert_event(
             s_id, subject, body, start_str, end_str, category, events_map
@@ -423,35 +417,6 @@ class OutlookService:
             logger.info(f"✅ Sprint personal creado en calendario: {s_name}")
 
         return result
-
-    def _resolve_issue_dates(self, fields: dict, role_map: dict):
-        """Resuelve el rango de fechas efectivas del ticket. Devuelve (dt_start, dt_end) o (None, None)."""
-        real_start = (
-            fields.get(role_map.get("real_start")) if "real_start" in role_map else None
-        )
-        real_end = (
-            fields.get(role_map.get("real_end"))
-            if "real_end" in role_map
-            else fields.get("resolutiondate")
-        )
-        exp_start = (
-            fields.get(role_map.get("exp_start")) if "exp_start" in role_map else None
-        )
-        exp_end = (
-            fields.get(role_map.get("exp_end"))
-            if "exp_end" in role_map
-            else fields.get("duedate")
-        )
-
-        effective_start = real_start or exp_start or real_end or exp_end
-        effective_end = real_end or exp_end or real_start or exp_start
-
-        if not effective_end:
-            return None, None, None, None, None, None
-
-        dt_start = parser.parse(effective_start).date()
-        dt_end = parser.parse(effective_end).date()
-        return dt_start, dt_end, real_start, real_end, exp_start, exp_end
 
     def _build_issue_effort_and_subject(
         self,
@@ -464,7 +429,6 @@ class OutlookService:
         hours_per_sp: float,
         logged_hours: float,
     ):
-        """Calcula el string de esfuerzo y compone el asunto del evento."""
         total_hours = sp_num * hours_per_sp
         if total_hours > 0:
             hours_str = f"{sp_num:g} SP / {total_hours:g}h"
@@ -488,14 +452,10 @@ class OutlookService:
         sp_num: float,
         total_hours: float,
         logged_hours: float,
-        real_start,
-        real_end,
-        exp_start,
-        exp_end,
+        raw_dates: dict,
         fields: dict,
         field_mapping: list,
     ) -> str:
-        """Arma el cuerpo descriptivo del ticket con sus campos personalizados."""
         body_lines = [
             f"Cliente: {client_name}",
             f"Ticket: https://{domain}/browse/{key}",
@@ -505,10 +465,10 @@ class OutlookService:
             f"Story Points: {sp_num:g} ({total_hours:g} hs de esfuerzo estimado)",
             f"Horas registradas (Worklog): {logged_hours:g}h",
             "------------------------------------",
-            f"Inicio Real     : {real_start or 'Pendiente'}",
-            f"Fin Real        : {real_end or 'Pendiente'}",
-            f"Inicio Estimado : {exp_start or 'N/A'}",
-            f"Fin Estimado    : {exp_end or 'N/A'}",
+            f"Inicio Real     : {raw_dates.get('real_start') or 'Pendiente'}",
+            f"Fin Real        : {raw_dates.get('real_end') or 'Pendiente'}",
+            f"Inicio Estimado : {raw_dates.get('exp_start') or 'N/A'}",
+            f"Fin Estimado    : {raw_dates.get('exp_end') or 'N/A'}",
         ]
 
         excluded_roles = {
@@ -559,13 +519,10 @@ class OutlookService:
                     pass
             return "skipped"
 
-        dt_start, dt_end, real_start, real_end, exp_start, exp_end = (
-            self._resolve_issue_dates(fields, role_map)
-        )
+        dt_start, dt_end, raw_dates = parse_effective_issue_dates(fields, role_map)
         if not dt_end:
             return "skipped"
 
-        dt_end_inclusive = dt_end + timedelta(days=1)
         issue_type_obj = fields.get("issuetype") or {}
         type_name = (
             issue_type_obj.get("name", "").upper()
@@ -574,8 +531,8 @@ class OutlookService:
         )
         summary = fields.get("summary", "")
 
-        sp_num = self._extract_points(fields, role_map, field_mapping)
-        logged_hours = self._extract_my_logged_hours(fields, user_email)
+        sp_num = extract_story_points(fields, role_map, field_mapping)
+        logged_hours = extract_user_logged_hours(fields, user_email)
         hours_per_sp = board_config.hours_per_sp or 4
 
         total_hours, subject = self._build_issue_effort_and_subject(
@@ -599,17 +556,13 @@ class OutlookService:
             sp_num,
             total_hours,
             logged_hours,
-            real_start,
-            real_end,
-            exp_start,
-            exp_end,
+            raw_dates,
             fields,
             field_mapping,
         )
 
         issue_category = self.resolve_category_for_item("ticket", status_name)
-        start_str = dt_start.strftime("%Y-%m-%d 00:00")
-        end_str = dt_end_inclusive.strftime("%Y-%m-%d 00:00")
+        start_str, end_str = format_all_day_range(dt_start, dt_end)
 
         result = self._upsert_event(
             k, subject, body_content, start_str, end_str, issue_category, events_map
@@ -622,71 +575,3 @@ class OutlookService:
             logger.info(f"✅ Ticket creado en calendario: {k} en {dt_start}")
 
         return result
-
-    def _extract_my_logged_hours(
-        self, fields: dict, current_user_email: str = ""
-    ) -> float:
-        worklog_data = fields.get("worklog") or {}
-        worklogs = worklog_data.get("worklogs", [])
-
-        my_seconds = 0
-        if current_user_email and worklogs:
-            target_email = current_user_email.lower().strip()
-            target_user = target_email.split("@")[0]
-
-            for entry in worklogs:
-                author = entry.get("author", {})
-                author_email = (author.get("emailAddress") or "").lower().strip()
-                author_name = (author.get("displayName") or "").lower().strip()
-
-                if (
-                    (target_email and target_email in author_email)
-                    or (target_user and target_user in author_email)
-                    or (target_user and target_user in author_name)
-                ):
-                    my_seconds += entry.get("timeSpentSeconds", 0)
-
-        if my_seconds == 0:
-            my_seconds = fields.get("timespent") or 0
-
-        return round(my_seconds / 3600.0, 2)
-
-    def _extract_points(
-        self, fields: dict, role_map: dict, field_mapping: list
-    ) -> float:
-        point_field_ids = []
-
-        primary_sp_fid = role_map.get("story_points")
-        if primary_sp_fid:
-            point_field_ids.append(primary_sp_fid)
-
-        secondary_fids = []
-        for m in field_mapping:
-            fid = m.get("field_id")
-            fname = m.get("field_name", "").lower()
-
-            if not fid or fid in point_field_ids:
-                continue
-
-            if any(
-                term in fname
-                for term in ["point", "puntos", "story point", "bugpoint", "taskpoint"]
-            ):
-                if "final" in fname or "real" in fname:
-                    secondary_fids.insert(0, fid)
-                else:
-                    secondary_fids.append(fid)
-
-        point_field_ids.extend(secondary_fids)
-
-        for fid in point_field_ids:
-            val = fields.get(fid)
-            if val is not None:
-                try:
-                    num = float(val)
-                    if num > 0:
-                        return num
-                except (ValueError, TypeError):
-                    continue
-
-        return 0.0

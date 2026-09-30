@@ -12,7 +12,8 @@ Incluye interfaz web local construida sobre FastAPI y SQLite para administrar m�
 - **Control de Conectividad y VPN (`NetworkGuard`):** Valida ventanas horarias operativas (ej. 07:00 a 20:00) y verifica conectividad/VPN antes de disparar consultas para evitar bloqueos y logs de error.
 - **Identificación Unívoca en Calendario:** Eventos prefijados con la conexión del cliente y etiquetas normalizadas de estado (ej. `[FedPat] [CBS-5060] [ESTADO: EN CURSO]`) para facilitar filtros y coloreado automático.
 - **Introspección y Mapeo Dinámico de Campos:** Detección automática del catálogo de campos de Jira con asignación interactiva de roles (`Fecha Inicio Real`, `Fecha Fin Real`, `Fecha Inicio Esperada`, `Fecha Fin Esperada`, `Story Points`).
-- **Cálculo de Esfuerzo en Horas:** Conversión automática de Story Points a horas de trabajo reales/estimadas proyectadas en el asunto y cuerpo del evento.
+- **Cálculo de Esfuerzo y Soporte de Worklog:** Conversión automática de Story Points a horas de trabajo proyectadas. En tickets sin puntos asignados (como tareas de soporte o bugs), calcula y refleja automáticamente las horas reales imputadas por el usuario (worklog) en el asunto y cuerpo del evento.
+- **Soporte para Colaboradores y Equipos Compartidos:** Compatibilidad nativa con filtros JQL para campos de usuarios colaboradores sin desvirtuar el aislamiento de métricas del sprint activo.
 - **Métricas de Sprints:** Generación de eventos de Sprint con estado explícito (`[ESTADO: ACTIVO]` o `[ESTADO: CERRADO]`), progreso de Story Points (estimados vs. completados) y desglose de tickets resueltos vs. pendientes.
 - **Consola de Logs Integrada:** Pestaña web con visor en vivo y buscador/filtro en tiempo real por cliente o ticket.
 - **Sin permisos de Azure AD:** Conexión nativa directa vía MAPI COM con el cliente Outlook instalado en la máquina.
@@ -36,6 +37,8 @@ JiraTeamSync/
 │   │   ├── outlook_service.py  # Manipulación del calendario vía MAPI COM
 │   │   └── network_guard.py    # Validación de ventanas horarias y host de VPN
 │   └── utils/
+│       ├── date_utils.py       # Resolución de fechas efectivas y rangos para Outlook
+│       ├── jira_utils.py       # Parseo de JQL, Story Points y cómputo de Worklog
 │       └── logger.py           # Logger rotativo con persistencia en app.log
 ├── tests/
 │   ├── conftest.py             # Fixtures para pruebas aisladas
