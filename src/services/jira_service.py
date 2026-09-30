@@ -43,6 +43,8 @@ class JiraService:
             "duedate",
             "resolutiondate",
             "created",
+            "timespent",
+            "worklog",
         ]
         sprint_fid = None
         for m in mapping:
