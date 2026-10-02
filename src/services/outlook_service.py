@@ -23,10 +23,11 @@ class OutlookService:
                 subj = getattr(item, "Subject", "")
                 matches = re.findall(r"\[([A-Z0-9_\-]+)\]", subj)
                 for m in matches:
-                    if m.startswith("SPRINT-") or "-" in m:
+                    # Validar que sea un Sprint (SPRINT-123) o una clave de Jira válida (letras-números)
+                    if m.startswith("SPRINT-") or re.match(r"^[A-Z][A-Z0-9]+-\d+$", m):
                         events_map[m] = item
                         break
-            except Exception:
+            except Exception:  # noqa: BLE001, S112
                 continue
         return events_map
 

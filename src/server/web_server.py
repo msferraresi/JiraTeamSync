@@ -322,7 +322,7 @@ HTML_TEMPLATE = """
     <div id="tab-connections" class="tab-content">
         <div class="card">
             <h2>🏢 Clientes Configurados</h2>
-            <div id="clientslist">Cargando...</div>
+            <div id="clientsList">Cargando...</div>
 
             <h3 style="margin-top: 25px;">➕ Agregar Cliente</h3>
             <div class="grid-3">
@@ -365,7 +365,7 @@ HTML_TEMPLATE = """
 
         <div class="card" id="boardsSection" style="display:none;">
             <h2 id="currentClientTitle">📋 Tableros del Cliente</h2>
-            <div id="boardslist"></div>
+            <div id="boardsList"></div>
 
             <h3 id="boardFormTitle" style="margin-top:25px;">➕ Configurar Tablero</h3>
             <input type="hidden" id="edit_board_db_id" value="">
@@ -434,12 +434,13 @@ HTML_TEMPLATE = """
     let logTimer = null;
 
     function switchTab(tabId, btn) {
-        document.querySelectorAll('.tab-content').forEach(el => el.classlist.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(el => el.classlist.remove('active'));
-        document.getElementById(tabId).classlist.add('active');
-        btn.classlist.add('active');
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        const target = document.getElementById(tabId);
+        if (target) target.classList.add('active');
+        if (btn) btn.classList.add('active');
 
-        if(tabId === 'tab-logs') {
+        if (tabId === 'tab-logs') {
             loadLogs();
         }
     }
@@ -722,13 +723,16 @@ HTML_TEMPLATE = """
     }
 
     function loadLogs() {
-        const filterVal = document.getElementById('logFilter').value;
+        const filterEl = document.getElementById('logFilter');
+        const filterVal = filterEl ? filterEl.value : "";
         fetch(`/api/logs?filter=${encodeURIComponent(filterVal)}`)
             .then(r => r.json())
             .then(data => {
                 const box = document.getElementById('logBox');
-                box.textContent = data.logs.join('');
-                box.scrollTop = box.scrollHeight;
+                if (box) {
+                    box.textContent = Array.isArray(data.logs) ? data.logs.join('') : (data.logs || "");
+                    box.scrollTop = box.scrollHeight;
+                }
             })
             .catch(e => console.error("Error al cargar logs:", e));
     }
